@@ -84,8 +84,24 @@ function clientIp(request) {
   )
 }
 
+// KV 可选：未绑定 STATE 时退化为内存态（isolate 存活期内有效），便于 CI 直接部署
+const memoryKV = new Map()
+
+function stateNS(env) {
+  if (env.STATE) return env.STATE
+  return {
+    get: async (key) => (memoryKV.has(key) ? memoryKV.get(key) : null),
+    put: async (key, value) => {
+      memoryKV.set(key, value)
+    },
+    delete: async (key) => {
+      memoryKV.delete(key)
+    },
+  }
+}
+
 async function getState(env, key, fallback = null) {
-  const v = await env.STATE.get(key)
+  const v = await stateNS(env).get(key)
   return v === null ? fallback : v
 }
 
@@ -102,7 +118,7 @@ async function requireAdmin(request, env) {
     return { error: jsonResponse({ code: 401, data: '未授权' }, 200) }
   }
   const token = auth.slice(7)
-  const exists = await env.STATE.get(`token:${token}`)
+  const exists = await stateNS(env).get(`token:${token}`)
   if (!exists) {
     return { error: jsonResponse({ code: 401, data: '未授权' }, 200) }
   }
@@ -259,7 +275,7 @@ async function getStoredCookies(env) {
 }
 
 async function storeCookies(env, cookies) {
-  await env.STATE.put('douyin_cookies', JSON.stringify(normalizeCookies(cookies)))
+  await stateNS(env).put('douyin_cookies', JSON.stringify(normalizeCookies(cookies)))
 }
 
 async function keepLoginCookies(env, freshCookies) {
@@ -465,7 +481,7 @@ async function readTasks(env) {
 }
 
 async function writeTasks(env, tasks) {
-  await env.STATE.put('tasks', JSON.stringify(tasks))
+  await stateNS(env).put('tasks', JSON.stringify(tasks))
 }
 
 function formatTime(timeStr) {
@@ -500,12 +516,12 @@ async function handleApi(request, env, ctx) {
     const username = q.get('username') || ''
     const password = q.get('password') || ''
     if (username === 'admin' && (await sha256Hex(password)) === (await adminPasswordHash(env))) {
-      await env.STATE.put('last_login_ip', clientIp(request))
-      if (!(await env.STATE.get('worker_start_time'))) {
-        await env.STATE.put('worker_start_time', workerStartTime)
+      await stateNS(env).put('last_login_ip', clientIp(request))
+      if (!(await stateNS(env).get('worker_start_time'))) {
+        await stateNS(env).put('worker_start_time', workerStartTime)
       }
       const token = await genToken()
-      await env.STATE.put(`token:${token}`, '1', { expirationTtl: 7 * 24 * 3600 })
+      await stateNS(env).put(`token:${token}`, '1', { expirationTtl: 7 * 24 * 3600 })
       return jsonResponse({ code: 200, data: token })
     }
     return jsonResponse({ code: 400, data: '登录失败' })
@@ -527,7 +543,7 @@ async function handleApi(request, env, ctx) {
 
     if (method === 'GET' && path === '/Api/logout') {
       const token = getBearer(request)
-      if (token) await env.STATE.delete(`token:${token}`)
+      if (token) await stateNS(env).delete(`token:${token}`)
       return jsonResponse({ code: 200, data: '已退出登录' })
     }
 
@@ -538,7 +554,7 @@ async function handleApi(request, env, ctx) {
         return jsonResponse({ code: 400, data: '原密码错误' })
       }
       if (!newPwd) return jsonResponse({ code: 400, data: '新密码不能为空' })
-      await env.STATE.put('admin_hash', await sha256Hex(newPwd))
+      await stateNS(env).put('admin_hash', await sha256Hex(newPwd))
       return jsonResponse({ code: 200, data: '密码修改成功' })
     }
 
@@ -562,7 +578,7 @@ async function handleApi(request, env, ctx) {
     }
 
     if (method === 'GET' && path === '/Api/LoginDebug') {
-      await env.STATE.put('douyin_login', 'Yes')
+      await stateNS(env).put('douyin_login', 'Yes')
       return jsonResponse({ code: 200, data: 'OK' })
     }
 
@@ -591,14 +607,14 @@ async function handleApi(request, env, ctx) {
         await gotoChat(p)
         const logged = await isDouyinLoggedIn(p)
         if (logged) {
-          await env.STATE.put('douyin_login', 'Yes')
+          await stateNS(env).put('douyin_login', 'Yes')
           await storeCookies(env, cookies)
           return jsonResponse({ code: 200, data: 'ok' })
         }
         const debug = env.DOUYIN_SKIP_VERIFY === 'true'
         if (debug) {
           // 调试态允许存储 cookie 而不做页面校验
-          await env.STATE.put('douyin_login', 'Yes')
+          await stateNS(env).put('douyin_login', 'Yes')
           await storeCookies(env, cookies)
           return jsonResponse({ code: 200, data: 'ok' })
         }
@@ -629,7 +645,7 @@ async function handleApi(request, env, ctx) {
         const p = await getPage(env)
         await p.deleteCookie(...(await getStoredCookies(env)))
       } catch {}
-      await env.STATE.put('douyin_login', 'No')
+      await stateNS(env).put('douyin_login', 'No')
       await storeCookies(env, [])
       return jsonResponse({ code: 200, data: '已清除Cooke' })
     }
@@ -639,7 +655,7 @@ async function handleApi(request, env, ctx) {
       const p = await openChatReady(env)
       try {
         if (!(await isDouyinLoggedIn(p))) {
-          await env.STATE.put('douyin_login', 'No')
+          await stateNS(env).put('douyin_login', 'No')
           return jsonResponse({ code: 404, data: '未登录抖音' })
         }
         const list = await getDouyinFriends(p)
@@ -662,7 +678,7 @@ async function handleApi(request, env, ctx) {
       const p = await openChatReady(env)
       try {
         if (!(await isDouyinLoggedIn(p))) {
-          await env.STATE.put('douyin_login', 'No')
+          await stateNS(env).put('douyin_login', 'No')
           return jsonResponse({ code: 404, data: '未登录抖音' })
         }
         await sendDouyinFriendMessage(p, name, text)
@@ -707,7 +723,7 @@ async function handleApi(request, env, ctx) {
         if (!(await isDouyinLoggedIn(p))) {
           return jsonResponse({ code: '404', data: '系统繁忙,请稍后重新登录' })
         }
-        await env.STATE.put('douyin_login', 'Yes')
+        await stateNS(env).put('douyin_login', 'Yes')
         await keepLoginCookies(env, await p.cookies())
         return jsonResponse({ code: 200, data: 'ok' })
       } catch (e) {
@@ -842,9 +858,9 @@ async function runScheduled(env, ctx) {
     if (task.time !== hhmm) continue
     if (task.last_run_date === today) continue
     const lockKey = `cron_lock:${task.task_id}`
-    const locked = await env.STATE.get(lockKey)
+    const locked = await stateNS(env).get(lockKey)
     if (locked) continue
-    await env.STATE.put(lockKey, '1', { expirationTtl: 120 })
+    await stateNS(env).put(lockKey, '1', { expirationTtl: 120 })
 
     // 异步执行，不阻塞其他任务
     ctx.waitUntil(
@@ -852,19 +868,19 @@ async function runScheduled(env, ctx) {
         try {
           const p = await openChatReady(env)
           if (!(await isDouyinLoggedIn(p))) {
-            await env.STATE.put('douyin_login', 'No')
+            await stateNS(env).put('douyin_login', 'No')
             return
           }
           const text = task.text || localQuote(now)
           await sendDouyinFriendMessage(p, task.name, text)
-          await env.STATE.put('douyin_login', 'Yes')
+          await stateNS(env).put('douyin_login', 'Yes')
           task.last_run_date = today
           task.next_run = null
           await writeTasks(env, tasks)
         } catch (e) {
           console.warn(`task ${task.task_id} failed:`, e?.message || e)
         } finally {
-          await env.STATE.delete(lockKey).catch(() => {})
+          await stateNS(env).delete(lockKey).catch(() => {})
         }
       })()
     )
