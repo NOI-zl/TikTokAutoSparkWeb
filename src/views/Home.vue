@@ -154,11 +154,11 @@
             </div>
             <div class="info-item">
               <span class="info-label">API 地址</span>
-              <span class="info-value">http://127.0.0.1:9844</span>
+              <span class="info-value">Cloudflare Workers</span>
             </div>
             <div class="info-item">
-              <span class="info-label">前端端口</span>
-              <span class="info-value">5173</span>
+              <span class="info-label">部署类型</span>
+              <span class="info-value">纯 Workers + KV</span>
             </div>
             <div class="info-item">
               <span class="info-label">运行状态</span>

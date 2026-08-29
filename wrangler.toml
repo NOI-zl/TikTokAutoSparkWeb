@@ -1,0 +1,31 @@
+# Cloudflare Workers 部署配置
+# 1) 创建 KV: wrangler kv namespace create STATE
+# 2) 把返回的 id 填到下面 kv_namespaces.id
+# 3) 构建前端: npm install && npm run build
+# 4) 部署: wrangler deploy
+name = "tiktok-auto-spark-web"
+main = "worker/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+browser = { binding = "MYBROWSER", type = "browser" }
+
+[[kv_namespaces]]
+binding = "STATE"
+id = "请替换为你的KV_ID"
+preview_id = "请替换为你的KV_ID"
+
+[vars]
+# 定时任务按北京时间执行（UTC+8），可自行修改
+TIMEZONE_OFFSET = "8"
+# 手动登录时若为 true 则跳过页内校验，直接存储 Cookie
+DOUYIN_SKIP_VERIFY = "false"
+
+[triggers]
+crons = ["* * * * *"]

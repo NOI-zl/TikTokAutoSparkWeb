@@ -178,7 +178,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search, User, ArrowDown, Tickets, Check, Close } from '@element-plus/icons-vue'
 import { sendMessage, addTask } from '../api/douyin'
 import { friendsList, setFriendsList } from '../stores/browser'
