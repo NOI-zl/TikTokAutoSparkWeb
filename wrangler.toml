@@ -9,8 +9,10 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-# Browser Rendering 必须是顶层字段，位于任何 [section] 之前
-browser = { binding = "MYBROWSER", type = "browser" }
+# 如需抖音浏览器自动化（好友/发消息/截图/扫码）：
+#   1) 在 Cloudflare 控制台给该 Worker 添加 Browser Rendering binding，名称固定为 MYBROWSER
+#   2) 本地部署时取消下面注释（需要账号开通 Workers Browser Rendering）
+# browser = { binding = "MYBROWSER", type = "browser" }
 
 [assets]
 directory = "./dist"
